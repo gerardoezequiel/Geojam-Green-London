@@ -32,5 +32,8 @@ export const CITIES: Record<string, City> = {
 
 export const TILES_BASE = process.env.NEXT_PUBLIC_TILES_URL ?? '/v1'
 
-export const tileUrl = (city: string, kind: 'pmtiles' | 'parquet' | 'cogs', file: string) =>
-  `${TILES_BASE}/${kind}/${city}/${file}`
+export const tileUrl = (
+  city: string,
+  kind: 'pmtiles' | 'parquet' | 'cogs' | 'geojson' | 'json',
+  file: string,
+): string => `${TILES_BASE}/${kind}/${city}/${file}`

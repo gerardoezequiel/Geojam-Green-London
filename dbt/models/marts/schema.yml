@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: anomalies
+    columns:
+      - name: MSOA21CD
+        tests:
+          - not_null
+      - name: lisa_cluster
+        tests:
+          - accepted_values:
+              values: ['HH', 'HL', 'LH', 'LL', 'NS']
+

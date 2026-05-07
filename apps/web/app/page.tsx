@@ -1,13 +1,13 @@
-import MapClient from '@/components/map/MapClient'
+import ProjectDashboard from '@/components/ProjectDashboard'
 
 export default function Page(): React.JSX.Element {
   return (
     <main className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-black/5 px-5 py-3 dark:border-white/10">
+      <header className="flex items-center justify-between border-b border-black/5 bg-white px-5 py-3 dark:border-white/10">
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Green London</h1>
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            NDVI 2024 by MSOA
+            Sentinel-2 NDVI by MSOA
           </span>
         </div>
         <nav className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
@@ -16,9 +16,7 @@ export default function Page(): React.JSX.Element {
           </span>
         </nav>
       </header>
-      <div className="flex-1">
-        <MapClient city="london" variable="mean_ndvi_late" />
-      </div>
+      <ProjectDashboard />
     </main>
   )
 }

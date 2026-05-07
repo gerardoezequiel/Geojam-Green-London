@@ -1,0 +1,53 @@
+{
+  "model_name": "random_forest",
+  "cv_mean_r2": 0.5470416668905774,
+  "moran_i": null,
+  "runtime_s": 3.428074416995514,
+  "feature_importances": [
+    {
+      "base_feature": "log_area_km2",
+      "importance": 0.2806606222803266
+    },
+    {
+      "base_feature": "dist_centre_sq",
+      "importance": 0.1147668094522944
+    },
+    {
+      "base_feature": "borough",
+      "importance": 0.1037821887415238
+    },
+    {
+      "base_feature": "dist_to_centre_km",
+      "importance": 0.10048798409825226
+    },
+    {
+      "base_feature": "centroid_lat",
+      "importance": 0.09827810594257064
+    },
+    {
+      "base_feature": "centroid_lon",
+      "importance": 0.07115126182437329
+    },
+    {
+      "base_feature": "log_pop_density",
+      "importance": 0.05860374582834162
+    },
+    {
+      "base_feature": "dist_to_park_km",
+      "importance": 0.04989884081001737
+    },
+    {
+      "base_feature": "park_access",
+      "importance": 0.04398051056087692
+    },
+    {
+      "base_feature": "density_x_dist",
+      "importance": 0.04379018299006416
+    },
+    {
+      "base_feature": "is_inner",
+      "importance": 0.034599747471358994
+    }
+  ],
+  "rows": 1002
+}
