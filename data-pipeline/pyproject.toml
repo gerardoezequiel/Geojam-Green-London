@@ -1,0 +1,23 @@
+[project]
+name = "green-cities-data-pipeline"
+version = "0.1.0"
+description = "Offline data pipeline producing COGs, PMTiles and Parquet for Green Cities"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=1.26",
+  "rasterio>=1.5",
+  "rio-cogeo>=7.0",
+  "geopandas>=1.0",
+  "pyogrio>=0.10",
+  "shapely>=2.0",
+  "h3>=4.1",
+  "pyarrow>=15",
+  "duckdb>=1.5",
+  "scikit-learn>=1.4",
+  "pystac-client>=0.7",
+  "odc-stac>=0.3",
+  "xarray>=2024.1",
+]
+
+[tool.uv]
+dev-dependencies = ["pytest>=8.0"]

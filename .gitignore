@@ -22,3 +22,20 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Pipeline outputs (uploaded to R2; not tracked)
+assets/
+geojam_data/
+data-pipeline/.venv/
+data-pipeline/build/
+*.tif
+!cities/*.yaml
+
+# Next.js
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/.vercel/
+.env.local
+.env*.local
+.claude/worktrees/
