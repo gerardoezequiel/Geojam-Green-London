@@ -169,10 +169,16 @@ CROSS JOIN bands b;
 
 | Mode | Where it runs | When |
 |---|---|---|
-| **Server-side** | dbt-duckdb in CI (GitHub Actions) | Pre-bake gold parquet for the SPA |
-| **Browser-side** | DuckDB-Wasm Web Worker | Interactive raster algebra, custom thresholds, ad-hoc band ratios |
+| **Server-side** | dbt-duckdb in CI (GitHub Actions) | Pre-bake gold parquet for the SPA. Uses `raster` extension. |
+| **Browser-side** | DuckDB-Wasm Web Worker | Filter, join, aggregate parquet. **No raster extension** (GDAL doesn't compile to WASM as of May 2026). |
 
-If the WASM build of `raster` is unavailable, the server still runs and the SPA reads pre-baked COGs only.
+**Update post-research (May 2026)**: the `raster` community extension does **not** have a WASM build, because its GDAL dependency does not compile to WebAssembly cleanly. The H3 extension is also unavailable in WASM. This is not a blocker:
+
+- All raster transforms (NDVI, zonal stats, threshold filters, change detection) run **server-side in dbt-duckdb** during the pipeline build, producing pre-baked COGs and parquet.
+- The **browser** reads those static outputs and uses `h3-js` for any client-side H3 maths.
+- Same SQL still runs in both places for non-raster work (filters, joins, aggregates), so the dbt models port directly to runtime queries.
+
+See `PERFORMANCE.md` §1 for the full verified-facts table.
 
 ## 4. Data architecture (medallion)
 
@@ -370,12 +376,78 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 ```
 
-### 6.2 Heavy compute escape hatches
+### 6.2 Heavy compute on Hetzner (preferred)
 
-GitHub-hosted runners are ~7 GB RAM. If Sentinel-2 mosaic builds blow that:
+The user already has spare capacity on a Hetzner server, which is the right home for the pipeline workhorse. GitHub-hosted runners are 7 GB RAM and 6 h job cap; multi-city Sentinel-2 mosaics + dbt-duckdb materialisation will hit both walls.
 
-1. Self-hosted runner on Hetzner CCX23 (~€20/month, 32 GB RAM).
-2. GCP Batch / AWS Batch one-shot jobs invoked by the workflow.
+**Recommended split:**
+
+| Layer | Runs on | Why |
+|---|---|---|
+| GitHub Actions orchestration | GitHub-hosted runner | Triggers, secrets, status checks, PR previews |
+| dbt-duckdb pipeline (bronze→silver→gold) | **Hetzner via self-hosted runner** | RAM headroom, no minute cap, fast disk |
+| Sentinel-2 STAC ingest + mosaic | **Hetzner** | 4–10 GB working memory per city per year |
+| Raster zonal stats via `raster` extension | **Hetzner** | GDAL native build, threaded |
+| ML training (RandomForest, hierarchical, pysal) | **Hetzner** | Reproducible local DuckDB cache between runs |
+| Publish to R2 | wrangler from Hetzner | Same machine writes the artefacts and uploads them |
+| Frontend build + deploy | Vercel | Already paid, fast |
+| Edge Functions (OG, ee-proxy if needed) | Vercel Fluid Compute | Up to 800 s, 3 GB |
+
+**Hetzner sizing for 3 cities × 9 years**
+
+| Workload | Min spec | Hetzner SKU |
+|---|---|---|
+| Light dev / single city | 4 vCPU, 8 GB | CCX13 dedicated vCPU (~€13/mo) or CX22 shared (~€4/mo) |
+| 3 cities, weekly cron | 8 vCPU, 16 GB | CCX23 (~€26/mo) |
+| Full multi-city + extra collections | 16 vCPU, 32 GB | CCX33 / AX41 dedicated (~€40/mo) |
+
+Storage: Hetzner BX volumes are €4/TB/month if we want a local bronze cache (raw STAC items, original COGs) so re-runs don't pull from S3 every time. Otherwise the box just runs ephemeral builds.
+
+**Self-hosted GitHub Actions runner setup**
+
+```sh
+# On the Hetzner box, one-time
+mkdir actions-runner && cd actions-runner
+curl -O -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf actions-runner-linux-x64.tar.gz
+./config.sh --url https://github.com/gerardoezequiel/Geojam-Green-London --token <REGISTRATION_TOKEN>
+sudo ./svc.sh install && sudo ./svc.sh start
+
+# Tag it with `self-hosted, linux, hetzner, geo`
+```
+
+In `.github/workflows/build.yml`:
+
+```yaml
+jobs:
+  build:
+    runs-on: [self-hosted, hetzner, geo]
+    strategy:
+      matrix: { city: [london, berlin, paris] }
+```
+
+Falls back to `runs-on: ubuntu-latest` only for the lightweight `web` workflow.
+
+**Container image for reproducibility**
+
+A `Dockerfile` in `pipeline/docker/` pins GDAL, DuckDB, dbt-duckdb, h3, pysal, scikit-learn versions. The runner pulls and runs the image so CI and local dev are byte-identical.
+
+**Other useful Hetzner roles**
+
+- **Bronze cache** of raw Sentinel-2 COG references and Overture parquet so re-runs avoid trans-Atlantic fetches (us-west-2 → Hetzner Falkenstein RTT is ~120 ms; cached, near-zero).
+- **Optional Postgres + PostGIS** if we ever outgrow static parquet for live queries. Avoids paying Supabase Pro for proper resources. Hetzner managed Postgres exists but self-hosting on the box is cheaper.
+- **pmtiles-server / titiler** as a dev-tile fallback if Cloudflare R2 ever has an outage (low risk; not worth setting up pre-emptively).
+- **Observability** (Grafana + Prometheus + Loki) for pipeline metrics if we add Dagster later.
+
+**What stays NOT on Hetzner**
+
+- Static asset serving — R2 wins on egress and CDN reach.
+- Frontend hosting — Vercel wins on DX.
+- Auth / DB if we need it — Supabase Auth-only or, for full Postgres, this Hetzner box.
+
+### 6.3 Cloud Batch escape hatch (last resort)
+
+If Hetzner ever runs short, GCP Batch / AWS Batch one-shot jobs invoked by the workflow remain an option. Not needed at current scale.
 
 ### 6.3 Alternative orchestrators
 
@@ -474,17 +546,31 @@ The COOP/COEP headers are required for SharedArrayBuffer, which DuckDB-Wasm uses
 
 ### CLI workflow
 
+Two CLIs in play: `vercel` (compute + hosting) and `wrangler` (R2 + DNS + Workers). Both are authenticated locally and work non-interactively in CI when their env vars are set.
+
 ```sh
-# one-time
+# Cloudflare R2 (one-time)
+wrangler r2 bucket create green-cities
+wrangler r2 bucket cors put green-cities --rules ./infra/cors.json
+wrangler r2 bucket domain add green-cities tiles.green.cities --zone-id $CF_ZONE_ID
+# self-host DuckDB-Wasm bundle for cold-start perf (see PERFORMANCE.md §1)
+wrangler r2 object put green-cities/v1/duckdb/duckdb-eh.wasm --file=node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm --content-type application/wasm --cache-control "public, max-age=31536000, immutable"
+
+# Vercel (one-time)
 vercel link --project green-london --scope gerardoezequiel
 vercel env pull .env.local
-vercel env add R2_ACCESS_KEY_ID            production
+vercel env add R2_ACCESS_KEY_ID            production         # for dbt-duckdb httpfs only
 vercel env add R2_SECRET_ACCESS_KEY        production
+vercel env add R2_S3_ENDPOINT              production preview development
 vercel env add NEXT_PUBLIC_R2_BUCKET_URL   production preview development
 vercel blob create-store green-cities-blob --region fra1 --access public
 
 # develop
 vercel dev
+
+# pipeline publish (in CI)
+wrangler r2 object put green-cities/v1/pmtiles/london/msoa.pmtiles --file=$ASSETS/pmtiles/msoa.pmtiles
+# (looped over all gold artefacts; see pipeline/publish.py)
 
 # preview deploy on push (auto via git integration)
 git push origin feat/city-berlin
@@ -492,6 +578,8 @@ git push origin feat/city-berlin
 # production
 vercel --prod
 ```
+
+Account IDs: Vercel team `team_vDeAFAr6tfJEEcvfxUavreth` (gerardoezequiel), Cloudflare account `9c004c6544357bb17253cbb463beb243`.
 
 Edge Config for the city registry:
 
