@@ -171,24 +171,96 @@ For GitHub Actions, mint a scoped API token (R2 read+write on `green-cities` onl
 
 We still keep an S3-compatible endpoint in `dbt/profiles.yml` for `dbt-duckdb` to read parquet via `httpfs` (DuckDB only speaks S3). That is the only place the S3 shim is needed.
 
-## 6b. Hetzner as the pipeline workhorse
+## 6b. Compute: GitHub Actions vs Hetzner — actual numbers
 
-Hetzner replaces GitHub-hosted runners for the heavy build steps. The architect-agent audit identified the 7 GB RAM cap and 6 h job cap as walls; Hetzner side-steps both.
+After verifying the existing Hetzner box and GitHub Actions tier, the recommendation is the inverse of the initial design. The repo is **public**, so GitHub Actions is free and sufficient for v1.
 
-| Job | Runner |
+### Your Hetzner box `infra-01` (verified May 2026)
+
+| Spec | Value |
 |---|---|
-| Pipeline orchestration | GitHub Actions (`ubuntu-latest`) |
-| dbt-duckdb build, raster zonal stats, ML training | **Hetzner self-hosted runner** |
-| Frontend build + deploy | Vercel |
-| Static asset serving | R2 |
+| Type | CX33 (shared vCPU, AMD EPYC-Rome) |
+| vCPU / RAM / Disk | 4 / 8 GB / 80 GB local SSD |
+| Location | nbg1 (Nuremberg) |
+| Included traffic | 20 TB / month |
+| Monthly cost | **€7.79 (sunk)** |
+| Disk free | 40 GB (32 GB used by ollama, karakeep, meilisearch, openclaw, etc.) |
+| RAM free under load | ~5 GB |
 
-Setup: register the GH self-hosted runner on the Hetzner box with tags `self-hosted, hetzner, geo` and target it from `.github/workflows/build.yml`. A `Dockerfile` pins GDAL/DuckDB/dbt-duckdb/h3/pysal versions for reproducibility.
+### GitHub Actions tier (verified)
 
-Sizing: CCX23 dedicated vCPU (8 vCPU, 16 GB, ~€26/mo) is the sweet spot for 3 cities × 9 years. CCX33 / AX41 if we add more collections.
+| Plan | Standard ubuntu-latest |
+|---|---|
+| Public repos | **Free, unlimited** |
+| Private repos (Pro) | 3000 min/month included; $0.008/min after |
+| Standard runner spec | 2 vCPU, 7 GB RAM, 14 GB SSD |
+| Job cap | 6 hours |
 
-Bonus uses of the box: bronze cache for Sentinel-2 STAC (Hetzner Falkenstein → us-west-2 RTT ~120 ms, cached subsequent runs are near-zero), optional self-hosted Postgres+PostGIS if we ever exceed static-parquet limits, and a fallback pmtiles-server.
+The Green Cities repo is public, so v1 build cost on GH Actions is **€0**.
 
-What stays elsewhere: static asset serving on R2, frontend on Vercel, auth (when added) on Supabase Auth.
+### Decision: GitHub Actions is the default; Hetzner is the escape hatch
+
+| Job | Runner | Cost |
+|---|---|---|
+| Weekly pipeline build (3 cities × 9 years) | GitHub Actions `ubuntu-latest` | €0 |
+| Frontend build + deploy | Vercel | included in Pro |
+| Static asset serving | R2 | ~€0.05–0.50/mo |
+| Heavy reprocessing, ML retraining, full-history rebuilds | **Hetzner infra-01 (self-hosted runner)** | €0 marginal |
+| Bronze cache (optional) | Hetzner + Volume €0.40/mo per 100 GB | €0–4/mo |
+
+### When to flip to Hetzner
+
+- A single dbt-duckdb model OOMs above 6 GB working set (probably never at our scale)
+- A job exceeds the 6-hour cap
+- We move the repo private and burn through the 3000-min Pro budget
+- ML training picks up (multiple Sentinel-2 years × multiple cities + spatial autocorrelation)
+
+### Hetzner setup when needed
+
+```sh
+# On infra-01
+mkdir actions-runner && cd actions-runner
+curl -O -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf actions-runner-linux-x64.tar.gz
+./config.sh \
+  --url https://github.com/gerardoezequiel/Geojam-Green-London \
+  --token <REGISTRATION_TOKEN> \
+  --labels self-hosted,linux,hetzner,geo
+sudo ./svc.sh install && sudo ./svc.sh start
+```
+
+Then in `.github/workflows/build.yml` switch only the heavy job:
+
+```yaml
+jobs:
+  pipeline:
+    runs-on: ${{ inputs.heavy && '[self-hosted, hetzner, geo]' || 'ubuntu-latest' }}
+```
+
+### Disk pressure on infra-01
+
+40 GB free is borderline if we cache bronze data. Calculation:
+
+| Item | Size |
+|---|---|
+| Bronze STAC items (3 cities × 9 years JSON) | ~50 MB |
+| Bronze Overture clipped parquet | ~500 MB |
+| Bronze Sentinel-2 COG metadata only (URLs) | ~10 MB |
+| Working dbt-duckdb files | ~5 GB peak |
+| Gold outputs (transient) | ~2 GB |
+| **Total during build** | **~8 GB** |
+
+Fits, but tight alongside ollama and karakeep. If we want a permanent bronze cache, attach a **Hetzner Volume** at €4/TB/month = €0.40 for 100 GB. Mount at `/mnt/bronze`.
+
+### What never moves to Hetzner
+
+- Static asset serving — R2 wins on egress and CDN reach
+- Frontend hosting — Vercel wins on DX and edge
+- Auth (when added) — Supabase free tier or Vercel Functions
+
+### Why not a Pro plan to get a bigger GH runner
+
+GitHub Actions has paid larger runners (4 vCPU/16 GB) at $0.016/min. A 30-min weekly build = $0.48/month. Cheap, but Hetzner already exists and a self-hosted runner is more portable. Use larger GH runners only if Hetzner is unavailable or we want zero-maintenance burst capacity.
 
 ## 7. Smoke tests in CI
 

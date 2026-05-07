@@ -376,32 +376,22 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 ```
 
-### 6.2 Heavy compute on Hetzner (preferred)
+### 6.2 Compute split (GH Actions default, Hetzner escape hatch)
 
-The user already has spare capacity on a Hetzner server, which is the right home for the pipeline workhorse. GitHub-hosted runners are 7 GB RAM and 6 h job cap; multi-city Sentinel-2 mosaics + dbt-duckdb materialisation will hit both walls.
+**Verified May 2026** (after checking the actual Hetzner box and GH plan): the repo is public, so GitHub-hosted runners are **free and sufficient for v1**. The earlier worry about a 7 GB RAM wall was over-cautious for our scale.
 
-**Recommended split:**
-
-| Layer | Runs on | Why |
+| Layer | Runs on | Cost |
 |---|---|---|
-| GitHub Actions orchestration | GitHub-hosted runner | Triggers, secrets, status checks, PR previews |
-| dbt-duckdb pipeline (bronze→silver→gold) | **Hetzner via self-hosted runner** | RAM headroom, no minute cap, fast disk |
-| Sentinel-2 STAC ingest + mosaic | **Hetzner** | 4–10 GB working memory per city per year |
-| Raster zonal stats via `raster` extension | **Hetzner** | GDAL native build, threaded |
-| ML training (RandomForest, hierarchical, pysal) | **Hetzner** | Reproducible local DuckDB cache between runs |
-| Publish to R2 | wrangler from Hetzner | Same machine writes the artefacts and uploads them |
-| Frontend build + deploy | Vercel | Already paid, fast |
-| Edge Functions (OG, ee-proxy if needed) | Vercel Fluid Compute | Up to 800 s, 3 GB |
+| Pipeline orchestration + light builds | GitHub Actions `ubuntu-latest` (free, unlimited for public repos) | €0 |
+| dbt-duckdb pipeline | GitHub Actions standard runner (2 vCPU / 7 GB / 14 GB) | €0 |
+| Sentinel-2 ingest + mosaic | GitHub Actions ditto | €0 |
+| Frontend build + deploy | Vercel | included in Pro |
+| Edge Functions | Vercel Fluid Compute (up to 800 s, 3 GB) | included in Pro |
+| **Heavy reprocessing / ML training / private repo** | **Hetzner `infra-01` self-hosted runner** | €0 marginal (€7.79 already sunk) |
 
-**Hetzner sizing for 3 cities × 9 years**
+See `PERFORMANCE.md` §6b for the verified hardware specs and the trigger conditions to flip jobs to Hetzner.
 
-| Workload | Min spec | Hetzner SKU |
-|---|---|---|
-| Light dev / single city | 4 vCPU, 8 GB | CCX13 dedicated vCPU (~€13/mo) or CX22 shared (~€4/mo) |
-| 3 cities, weekly cron | 8 vCPU, 16 GB | CCX23 (~€26/mo) |
-| Full multi-city + extra collections | 16 vCPU, 32 GB | CCX33 / AX41 dedicated (~€40/mo) |
-
-Storage: Hetzner BX volumes are €4/TB/month if we want a local bronze cache (raw STAC items, original COGs) so re-runs don't pull from S3 every time. Otherwise the box just runs ephemeral builds.
+**Existing Hetzner hardware** (verified): `infra-01` is a CX33 (4 vCPU, 8 GB RAM, 80 GB disk, 20 TB traffic, nbg1) at €7.79/month, already paid. 40 GB free disk and ~5 GB free RAM under load. Adequate for our pipeline; not adequate for a permanent bronze cache without a Volume add-on (€0.40/month per 100 GB).
 
 **Self-hosted GitHub Actions runner setup**
 
