@@ -1,0 +1,23 @@
+LONDON GREEN STRATEGY BRIEF (2025)
+===================================
+
+TOP 5 MOST EQUITABLE BOROUGHS (Green sqm/person):
+5. Brentwood            | 1,906.9 sqm/person
+6. Bromley              | 455.0 sqm/person
+17. Havering             | 428.8 sqm/person
+18. Hillingdon           | 378.2 sqm/person
+8. City of London       | 337.0 sqm/person
+
+BOTTOM 5 LEAST EQUITABLE BOROUGHS (Green sqm/person):
+21. Kensington and Chelsea | 84.7 sqm/person
+23. Lambeth              | 84.5 sqm/person
+13. Hackney              | 73.6 sqm/person
+20. Islington            | 68.6 sqm/person
+31. Tower Hamlets        | 63.6 sqm/person
+
+MOST IMPROVED BOROUGHS (Greening Trend 2016-2025):
+5. Brentwood            | +0.039 NDVI gain
+24. Lewisham             | +0.007 NDVI gain
+1. Barking and Dagenham | +0.004 NDVI gain
+17. Havering             | +-0.005 NDVI gain
+8. City of London       | +-0.007 NDVI gain
