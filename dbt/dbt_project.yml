@@ -1,0 +1,32 @@
+name: green_cities
+version: 1.0.0
+config-version: 2
+profile: green_cities
+
+model-paths: [models]
+seed-paths:  [seeds]
+test-paths:  [tests]
+macro-paths: [macros]
+
+vars:
+  city: london
+  release: '2026-04-15.0'
+  r2_root: '{{ env_var("R2_ROOT_URL") }}'
+
+models:
+  green_cities:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: external
+      +format: parquet
+      +location: '{{ var("r2_root") }}/gold/{{ var("city") }}/{name}.parquet'
+
+seeds:
+  green_cities:
+    cities:
+      +column_types:
+        slug: VARCHAR
+        crs_equal_area: VARCHAR

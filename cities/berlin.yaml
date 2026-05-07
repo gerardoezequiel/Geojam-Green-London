@@ -1,0 +1,46 @@
+slug: berlin
+name: Berlin
+country_iso: DE
+language: de-DE
+crs_equal_area: EPSG:25832    # ETRS89 / UTM zone 32N
+bbox_wgs84: [13.08, 52.34, 13.77, 52.68]
+centre_wgs84: [13.4050, 52.5200]  # Brandenburger Tor
+
+levels:
+  macro: { code: bezirk,            count: 12,  adapter: bkg_bezirk }
+  meso:  { code: lor_planungsraum,  count: 542, adapter: berlin_fis_lor_planungsraum }
+  micro: { code: lor_planungsblock, count: 4471, adapter: berlin_fis_lor_planungsblock }
+
+sources:
+  population:
+    adapter: berlin_lor_einwohner
+    year: 2024
+  deprivation:
+    adapter: berlin_sozialatlas
+    year: 2021
+    field: status_index
+  public_greenspace:
+    adapter: berlin_fis_gruenanlagen
+    wfs: https://fbinter.stadt-berlin.de/fb/wfs/data/senstadt/s_gruenanlagenbestand
+  imagery:
+    stac: https://earth-search.aws.element84.com/v1/
+    collection: sentinel-2-l2a
+    cog_root: s3://sentinel-cogs/sentinel-s2-l2a-cogs/
+  overture:
+    release: 2026-04-15.0
+    s3_root: s3://overturemaps-us-west-2/release/2026-04-15.0/
+
+filters:
+  bezirk_names_for_overture:
+    - Mitte
+    - Friedrichshain-Kreuzberg
+    - Pankow
+    - Charlottenburg-Wilmersdorf
+    - Spandau
+    - Steglitz-Zehlendorf
+    - Tempelhof-Schöneberg
+    - Neukölln
+    - Treptow-Köpenick
+    - Marzahn-Hellersdorf
+    - Lichtenberg
+    - Reinickendorf

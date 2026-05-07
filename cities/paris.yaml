@@ -1,0 +1,37 @@
+slug: paris
+name: Paris
+country_iso: FR
+language: fr-FR
+crs_equal_area: EPSG:2154     # RGF93 / Lambert-93
+bbox_wgs84: [2.22, 48.81, 2.47, 48.91]
+centre_wgs84: [2.3522, 48.8566]  # Notre-Dame
+
+# Note: 'Paris intra-muros' is 20 arrondissements;
+# 'Métropole du Grand Paris' (MGP) covers 131 communes if expanded scope is wanted.
+levels:
+  macro: { code: arrondissement, count: 20,  adapter: ign_admin_express_arrondissement }
+  meso:  { code: quartier,       count: 80,  adapter: opendata_paris_quartiers }
+  micro: { code: iris,           count: 992, adapter: insee_iris_2024 }
+
+sources:
+  population:
+    adapter: insee_filosofi
+    year: 2021
+    field: nbpers
+  deprivation:
+    adapter: insee_filosofi
+    year: 2021
+    field: median_uc_decile     # decile of median living standard
+  public_greenspace:
+    adapter: opendata_paris_espaces_verts
+    url: https://opendata.paris.fr/explore/dataset/espaces_verts/
+  imagery:
+    stac: https://earth-search.aws.element84.com/v1/
+    collection: sentinel-2-l2a
+    cog_root: s3://sentinel-cogs/sentinel-s2-l2a-cogs/
+  overture:
+    release: 2026-04-15.0
+    s3_root: s3://overturemaps-us-west-2/release/2026-04-15.0/
+
+filters:
+  insee_dept_codes: ['75']     # Paris department only; expand to ['75','92','93','94'] for MGP

@@ -1,0 +1,68 @@
+slug: london
+name: London
+country_iso: GB
+language: en-GB
+crs_equal_area: EPSG:27700
+bbox_wgs84: [-0.51, 51.28, 0.33, 51.69]
+centre_wgs84: [-0.1276, 51.5074]   # Charing Cross
+
+levels:
+  macro: { code: borough, count: 33,   adapter: ons_borough_2021 }
+  meso:  { code: msoa,    count: 1011, adapter: ons_msoa_2021 }
+  micro: { code: lsoa,    count: 4994, adapter: ons_lsoa_2021 }
+
+sources:
+  population:
+    adapter: ons_nomis
+    table: TS001
+    year: 2021
+  deprivation:
+    adapter: gov_uk_imd
+    year: 2019
+    field: income_decile
+  public_greenspace:
+    adapter: os_open_greenspace
+    url: https://osdatahub.os.uk/downloads/open/OpenGreenspace
+  imagery:
+    stac: https://earth-search.aws.element84.com/v1/
+    collection: sentinel-2-l2a
+    cog_root: s3://sentinel-cogs/sentinel-s2-l2a-cogs/
+  overture:
+    release: 2026-04-15.0
+    s3_root: s3://overturemaps-us-west-2/release/2026-04-15.0/
+
+filters:
+  borough_names_for_overture:
+    - Barking and Dagenham
+    - Barnet
+    - Bexley
+    - Brent
+    - Bromley
+    - Camden
+    - City of London
+    - Croydon
+    - Ealing
+    - Enfield
+    - Greenwich
+    - Hackney
+    - Hammersmith and Fulham
+    - Haringey
+    - Harrow
+    - Havering
+    - Hillingdon
+    - Hounslow
+    - Islington
+    - Kensington and Chelsea
+    - Kingston upon Thames
+    - Lambeth
+    - Lewisham
+    - Merton
+    - Newham
+    - Redbridge
+    - Richmond upon Thames
+    - Southwark
+    - Sutton
+    - Tower Hamlets
+    - Waltham Forest
+    - Wandsworth
+    - Westminster
